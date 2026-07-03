@@ -15,6 +15,9 @@ runs:
     - name: Update Version Number and Copyright ↗️
       id: setup
       shell: bash
+      env:
+        SOURCE_DIRECTORY: ${{ inputs.sourceDirectory }}
+        DISABLE_LINK_EXTENSIONS: ${{ inputs.disableLinkExtensions }}
       run: |
         : Update Version Number and Copyright ↗️
         if [[ "${RUNNER_DEBUG}" ]]; then set -x; fi
@@ -46,11 +49,11 @@ runs:
           -e "s/version = '([0-9]+\.[0-9]+\.[0-9]+)'/version = '${major}.${minor}.${patch}'/g" \
           -e "s/release = '([0-9]+\.[0-9]+\.[0-9]+)'/release = '${major}.${minor}.${patch}'/g" \
           -e "s/copyright = '(2017-[0-9]+, Lain Bailey)'/copyright = '2017-$(date +"%Y"), Lain Bailey'/g" \
-          ${{ inputs.sourceDirectory }}/docs/sphinx/conf.py
+          $SOURCE_DIRECTORY/docs/sphinx/conf.py
 
-        if [[ '${{ inputs.disableLinkExtensions }}' == 'true' ]]; then
+        if [[ '$DISABLE_LINK_EXTENSIONS' == 'true' ]]; then
           sed -i -e "s/html_link_suffix = None/html_link_suffix = ''/g" \
-           ${{ inputs.sourceDirectory }}/docs/sphinx/conf.py
+           $SOURCE_DIRECTORY/docs/sphinx/conf.py
           echo "artifactName=OBS Studio Docs (No Extensions)" >> $GITHUB_OUTPUT
         else
           echo "artifactName=OBS Studio Docs" >> $GITHUB_OUTPUT

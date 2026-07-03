@@ -47,6 +47,7 @@ runs:
       shell: bash
       env:
         CHANGED_FILES: ${{ steps.checks.outputs.changedFiles }}
+        FAIL_CONDITION: ${{ inputs.failCondition }}
       run: |
         : Validate XML 💯
         if [[ "${RUNNER_DEBUG}" ]]; then set -x; fi
@@ -54,7 +55,7 @@ runs:
         CHANGED_FILES=($(echo "${CHANGED_FILES//[\[\]\'\"]/}" | tr "," "\n"))
 
         if (( ${#CHANGED_FILES[@]} )); then
-          if [[ '${{ inputs.failCondition }}' == never ]]; then set +e; fi
+          if [[ "${FAIL_CONDITION}" == never ]]; then set +e; fi
           xmllint \
             --schema ${{ github.workspace }}/frontend/forms/XML-Schema-Qt5.15.xsd \
             --noout "${CHANGED_FILES[@]}"

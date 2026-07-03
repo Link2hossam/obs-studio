@@ -17,9 +17,11 @@ runs:
     - name: Check artifact type
       shell: bash
       working-directory: ${{ inputs.workingDirectory }}
+      env:
+        ARTIFACT: ${{ inputs.artifact }}
       run: |
         : Check artifact input
-        if ! [[ "${{ inputs.artifact }}" =~ builddir|repo|manifest|appstream ]]; then
+        if ! [[ "${ARTIFACT}" =~ builddir|repo|manifest|appstream ]]; then
           echo "::error::Given artifact type is incorrect"
           exit 2
         fi
@@ -28,18 +30,21 @@ runs:
       id: result
       shell: bash
       working-directory: ${{ inputs.workingDirectory }}
+      env:
+        ARTIFACT: ${{ inputs.artifact }}
+        PATH_INPUT: ${{ inputs.path }}
       run: |
         : Run flatpak-builder-lint
 
         return=0
-        result="$(flatpak-builder-lint --exceptions ${{ inputs.artifact }} ${{ inputs.path }})" || return=$?
+        result="$(flatpak-builder-lint --exceptions ${ARTIFACT} ${PATH_INPUT})" || return=$?
 
         if [[ ${return} != 0 && -z "${result}" ]]; then
           echo "::error::Error while running flatpak-builder-lint"
           exit 2
         fi
 
-        if [[ "${{ inputs.artifact }}" == "appstream" ]]; then
+        if [[ "${ARTIFACT}" == "appstream" ]]; then
           echo "${result}"
 
           if [[ ${return} != 0 ]]; then echo "::error::Flatpak appstream info is not valid"; fi
@@ -65,7 +70,7 @@ runs:
         # If no warnings or errors were found, only empty arrays were used for 'map' and thus
         # only an empty result array is generated.
 
-        template=" found in the Flatpak ${{ inputs.artifact }}"
+        template=" found in the Flatpak ${ARTIFACT}"
         while read -r log_line; do
           if [[ "${log_line}" ]]; then echo "${log_line}"; fi
         done <<< "$(echo "${result}" \

@@ -39,16 +39,19 @@ runs:
         CODESIGN_IDENT: ${{ inputs.codesignIdent }}
         CODESIGN_TEAM: ${{ inputs.codesignTeam }}
         PROVISIONING_PROFILE: ${{ inputs.provisioningProfileUUID }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_CODESIGN: ${{ inputs.codesign }}
       run: |
         : Run macOS Build
 
         local -a build_args=(
-          --config ${{ inputs.config }}
-          --target macos-${{ inputs.target }}
+          --config $INPUT_CONFIG
+          --target macos-$INPUT_TARGET
         )
         if (( ${+RUNNER_DEBUG} )) build_args+=(--debug)
 
-        if [[ '${{ inputs.codesign }}' == true ]] build_args+=(--codesign)
+        if [[ '$INPUT_CODESIGN' == true ]] build_args+=(--codesign)
 
         git fetch origin --no-tags --no-recurse-submodules -q
         .github/scripts/build-macos ${build_args}
@@ -68,12 +71,15 @@ runs:
       if: runner.os == 'Linux'
       shell: zsh --no-rcs --errexit --pipefail {0}
       working-directory: ${{ inputs.workingDirectory }}
+      env:
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_TARGET: ${{ inputs.target }}
       run: |
         : Run Ubuntu Build
 
         local -a build_args=(
-          --config ${{ inputs.config }}
-          --target ubuntu-${{ inputs.target }}
+          --config $INPUT_CONFIG
+          --target ubuntu-$INPUT_TARGET
         )
         if (( ${+RUNNER_DEBUG} )) build_args+=(--debug)
 
@@ -84,11 +90,14 @@ runs:
       if: runner.os == 'Windows'
       shell: pwsh
       working-directory: ${{ inputs.workingDirectory }}
+      env:
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_CONFIG: ${{ inputs.config }}
       run: |
         # Run Windows Build
         $BuildArgs = @{
-          Target = '${{ inputs.target }}'
-          Configuration = '${{ inputs.config }}'
+          Target = $Env:INPUT_TARGET
+          Configuration = $Env:INPUT_CONFIG
         }
 
         if ( $Env:RUNNER_DEBUG -ne $null ) {
@@ -101,6 +110,9 @@ runs:
     - name: Create Summary 📊
       if: contains(fromJSON('["Linux", "macOS"]'), runner.os)
       shell: zsh --no-rcs --errexit --pipefail {0}
+      env:
+        RUNNER_OS: ${{ runner.os }}
+        INPUT_TARGET: ${{ inputs.target }}
       run: |
         : Create Summary 📊
 
@@ -112,7 +124,7 @@ runs:
           ccache_data=("${(fA)$(ccache -s)}")
         }
 
-        print '### ${{ runner.os }} Ccache Stats (${{ inputs.target }})' >> $GITHUB_STEP_SUMMARY
+        print '### '$RUNNER_OS' Ccache Stats ('$INPUT_TARGET')' >> $GITHUB_STEP_SUMMARY
         print '```' >> $GITHUB_STEP_SUMMARY
         for line (${ccache_data}) {
           print ${line} >> $GITHUB_STEP_SUMMARY
