@@ -98,10 +98,12 @@ runs:
       shell: pwsh
       env:
         RCLONE_GCS_ENV_AUTH: 'true'
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+        CHANNEL: ${{ inputs.channel }}
       run: |
         . ${env:GITHUB_ACTION_PATH}\Ensure-Location.ps1
-        Ensure-Location "${{ github.workspace }}/old_builds"
-        rclone copy --transfers 100 ":gcs:obs-latest/${{ inputs.channel }}" .
+        Ensure-Location "$env:GITHUB_WORKSPACE/old_builds"
+        rclone copy --transfers 100 ":gcs:obs-latest/$env:CHANNEL" .
 
     - name: Sign Game Capture with RSA cert
       shell: pwsh
@@ -121,18 +123,23 @@ runs:
 
     - name: Run bouf
       shell: pwsh
+      env:
+        ARCHITECTURE: ${{ inputs.architecture }}
+        VERSION: ${{ inputs.version }}
+        CHANNEL: ${{ inputs.channel }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
       run: |
         . ${env:GITHUB_ACTION_PATH}\Invoke-External.ps1
         $boufArgs = @(
-           "--config",     "${env:GITHUB_ACTION_PATH}/config_${{ inputs.architecture }}.toml"
-           "--version",    "${{ inputs.version }}"
-           "--branch",     "${{ inputs.channel }}"
-           "-i",           "${{ github.workspace }}/build"
-           "-p",           "${{ github.workspace }}/old_builds"
-           "-o",           "${{ github.workspace }}/output"
+           "--config",     "${env:GITHUB_ACTION_PATH}/config_$env:ARCHITECTURE.toml"
+           "--version",    "$env:VERSION"
+           "--branch",     "$env:CHANNEL"
+           "-i",           "$env:GITHUB_WORKSPACE/build"
+           "-p",           "$env:GITHUB_WORKSPACE/old_builds"
+           "-o",           "$env:GITHUB_WORKSPACE/output"
            "--packaging-only"
         )
-        Invoke-External "${{ github.workspace }}\bouf\bin\bouf.exe" @boufArgs
+        Invoke-External "$env:GITHUB_WORKSPACE\bouf\bin\bouf.exe" @boufArgs
 
     - name: Sync Latest Build
       if: inputs.architecture == 'x64'
@@ -141,8 +148,10 @@ runs:
         RCLONE_INCLUDE: '**/${{ inputs.version }}/**'
         RCLONE_GCS_ENV_AUTH: 'true'
         RCLONE_GCS_BUCKET_POLICY_ONLY: 'true'
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+        CHANNEL: ${{ inputs.channel }}
       run: |
-        rclone sync --delete-excluded --transfers 100 "${{ github.workspace }}/old_builds" ":gcs:obs-latest/${{ inputs.channel }}"
+        rclone sync --delete-excluded --transfers 100 "$env:GITHUB_WORKSPACE/old_builds" ":gcs:obs-latest/$env:CHANNEL"
 
     - name: Upload Build to Archive
       if: inputs.architecture == 'x64'

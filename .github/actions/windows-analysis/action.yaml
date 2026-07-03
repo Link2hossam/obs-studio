@@ -22,12 +22,19 @@ runs:
 
     - name: Activate PVS-Studio
       shell: pwsh
+      env:
+        PVS_USERNAME: ${{ inputs.pvsUsername }}
+        PVS_KEY: ${{ inputs.pvsKey }}
       run: |
         . ${env:GITHUB_ACTION_PATH}\Invoke-External.ps1
-        Invoke-External "C:\Program Files (x86)\PVS-Studio\PVS-Studio_Cmd.exe" credentials -u ${{ inputs.pvsUsername }} -n ${{ inputs.pvsKey }}
+        Invoke-External "C:\Program Files (x86)\PVS-Studio\PVS-Studio_Cmd.exe" credentials -u $env:PVS_USERNAME -n $env:PVS_KEY
 
     - name: Run PVS-Studio Analysis
       shell: pwsh
+      env:
+        BUILD_TARGET: ${{ inputs.target }}
+        BUILD_CONFIG: ${{ inputs.config }}
+        WORKSPACE: ${{ github.workspace }}
       run: |
         [flags()] Enum PVSErrorCodes {
             Success = 0
@@ -47,10 +54,10 @@ runs:
         $pvsParams = @(
             "--progress"
             "--disableLicenseExpirationCheck"
-            "-p", "${{ inputs.target }}"
-            "-c", "${{ inputs.config }}"
-            "-t", "${{ github.workspace }}\build_x64\obs-studio.sln"
-            "-o", "${{ github.workspace }}\analysis.plog"
+            "-p", "$env:BUILD_TARGET"
+            "-c", "$env:BUILD_CONFIG"
+            "-t", "$env:WORKSPACE\build_x64\obs-studio.sln"
+            "-o", "$env:WORKSPACE\analysis.plog"
             "-C", "${env:GITHUB_ACTION_PATH}\obs.pvsconfig"
         )
         & "C:\Program Files (x86)\PVS-Studio\PVS-Studio_Cmd.exe" @pvsParams

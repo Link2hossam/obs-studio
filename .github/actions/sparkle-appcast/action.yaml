@@ -76,12 +76,16 @@ runs:
     - name: Download Builds 📥
       id: builds
       shell: zsh --no-rcs --errexit --pipefail {0}
+      env:
+        BASE_IMAGE: ${{ inputs.baseImage }}
+        CHANNEL: ${{ inputs.channel }}
+        COUNT: ${{ inputs.count }}
       run: |
         : Download Builds 📥
         if (( ${+RUNNER_DEBUG} )) setopt XTRACE
 
         pushd builds
-        local image_location=(${{ inputs.baseImage }})
+        local image_location=(${BASE_IMAGE})
         hdiutil attach -readonly -noverify -noautoopen -plist ${image_location} > result.plist
 
         local -i num_entities=$(( $(plutil -extract system-entities raw -- result.plist) - 1 ))
@@ -129,25 +133,27 @@ runs:
 
         local -a artifacts=($(\
           xmllint \
-            -xpath "//rss/channel/item[*[local-name()='channel'][text()='${{ inputs.channel }}']]/enclosure/@url" \
+            -xpath "//rss/channel/item[*[local-name()='channel'][text()='${CHANNEL}']]/enclosure/@url" \
             ${feed_url:t} \
           | sed -n 's/.*url="\(.*\)"/\1/p')
         )
 
         local url
         local file_name
-        for i ({1..${{ inputs.count }}}) {
+        for i ({1..${COUNT}}) {
           url="${artifacts[${i}]}"
           file_name="${artifacts[${i}]:t}"
           curl -s -L -O ${url}
         }
 
-        mv ${{ inputs.baseImage }} ${PWD}
+        mv ${BASE_IMAGE} ${PWD}
         rm -rf - result.plist
         popd
 
     - name: Prepare Release Notes 📝
       shell: zsh --no-rcs --errexit --pipefail {0}
+      env:
+        CHANNEL: ${{ inputs.channel }}
       run: |
         : Prepare Release Notes 📝
         if (( ${+RUNNER_DEBUG} )) setopt XTRACE
@@ -156,28 +162,34 @@ runs:
         echo '###################################################' >> notes.rst
         echo '' >> notes.rst
         git tag -l --format='%(contents:body)' ${GITHUB_REF_NAME} >> notes.rst
-        pandoc -f rst -t html notes.rst -o output/appcasts/notes_${{ inputs.channel }}.html
+        pandoc -f rst -t html notes.rst -o output/appcasts/notes_${CHANNEL}.html
 
     - name: Generate Appcast 🎙️
       shell: zsh --no-rcs --errexit --pipefail {0}
+      env:
+        SPARKLE_PRIVATE_KEY: ${{ inputs.sparklePrivateKey }}
+        FEED_URL: ${{ steps.builds.outputs.feedUrl }}
+        URL_PREFIX: ${{ inputs.urlPrefix }}
+        CHANNEL: ${{ inputs.channel }}
+        COUNT: ${{ inputs.count }}
       run: |
         : Generate Appcast 🎙️
         if (( ${+RUNNER_DEBUG} )) setopt XTRACE
 
-        print -n '${{ inputs.sparklePrivateKey }}' >> eddsa_private.key
-        local feed_url='${{ steps.builds.outputs.feedUrl }}'
+        print -n "${SPARKLE_PRIVATE_KEY}" >> eddsa_private.key
+        local feed_url="${FEED_URL}"
         local arch=${${${(s:_:)feed_url:t}[2]}//x86/x86_64}
         local sparkle_options=(
           --verbose
           --ed-key-file eddsa_private.key
-          --download-url-prefix '${{ inputs.urlPrefix }}/'
-          --full-release-notes-url "${feed_url//updates_*/notes_${{ inputs.channel }}.html}"
+          --download-url-prefix "${URL_PREFIX}/"
+          --full-release-notes-url "${feed_url//updates_*/notes_${CHANNEL}.html}"
           --maximum-versions 0
-          --maximum-deltas '${{ inputs.count }}'
-          --channel '${{ inputs.channel }}'
+          --maximum-deltas "${COUNT}"
+          --channel "${CHANNEL}"
         )
 
-        if [[ '${{ inputs.channel }}' == 'stable' ]] {
+        if [[ "${CHANNEL}" == 'stable' ]] {
           sparkle_options+=(--phased-rollout-interval 86400)
         }
 
@@ -196,21 +208,26 @@ runs:
 
     - name: Adjust Appcast 🎙️
       shell: zsh --no-rcs --errexit --pipefail {0}
+      env:
+        FEED_URL: ${{ steps.builds.outputs.feedUrl }}
+        URL_PREFIX: ${{ inputs.urlPrefix }}
+        CUSTOM_TITLE: ${{ inputs.customTitle }}
+        CUSTOM_LINK: ${{ inputs.customLink }}
       run: |
         : Adjust Appcast 🎙️
         if (( ${+RUNNER_DEBUG} )) setopt XTRACE
 
-        local feed_url='${{ steps.builds.outputs.feedUrl }}'
+        local feed_url="${FEED_URL}"
         local arch=${${${(s:_:)feed_url:t}[2]}//x86/x86_64}
         local -a appcasts=(output/appcasts/*_v2.xml)
         local adjusted
         for appcast (${appcasts}) {
           adjusted="${appcast//.xml/-adjusted.xml}"
           xsltproc \
-            --stringparam pDeltaUrl "${{ inputs.urlPrefix }}/sparkle_deltas/${arch}/" \
-            --stringparam pSparkleUrl '${{ inputs.urlPrefix }}/' \
-            --stringparam pCustomTitle '${{ inputs.customTitle }}' \
-            --stringparam pCustomLink '${{ inputs.customLink }}' \
+            --stringparam pDeltaUrl "${URL_PREFIX}/sparkle_deltas/${arch}/" \
+            --stringparam pSparkleUrl "${URL_PREFIX}/" \
+            --stringparam pCustomTitle "${CUSTOM_TITLE}" \
+            --stringparam pCustomLink "${CUSTOM_LINK}" \
             -o ${adjusted} ${GITHUB_ACTION_PATH}/appcast_adjust.xslt ${appcast}
 
           xmllint --format ${adjusted} >! ${appcast}
